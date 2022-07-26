@@ -10,9 +10,14 @@ def test1():
     print("Hello")
 
 
-def pad_number(match):
+def pad_number2(match):
     number = int(match.group(1))
     return format(number, "02d")
+
+
+def pad_number3(match):
+    number = int(match.group(1))
+    return format(number, "03d")
 
 
 # Functions that return rectangles near to a current rectangle
@@ -20,12 +25,12 @@ def pad_number(match):
 def get_right_top_rect(current_col, current_row, srtm_tile_h_cnt, tile_arrays_by_grid_coords, cap_array):
     right_top_rect_coords = ""
     if current_col == srtm_tile_h_cnt:
-        right_top_rect_coords = re.sub(r"^(\d+)", pad_number, str(1)) + "_" + re.sub(r"^(\d+)", pad_number,
-                                                                                     str(current_row))
+        right_top_rect_coords = re.sub(r"^(\d+)", pad_number2, str(1)) + "_" + re.sub(r"^(\d+)", pad_number2,
+                                                                                      str(current_row))
     else:
-        right_top_rect_coords = re.sub(r"^(\d+)", pad_number, str(current_col + 1)) + "_" + re.sub(r"^(\d+)",
-                                                                                                   pad_number,
-                                                                                                   str(current_row))
+        right_top_rect_coords = re.sub(r"^(\d+)", pad_number2, str(current_col + 1)) + "_" + re.sub(r"^(\d+)",
+                                                                                                    pad_number2,
+                                                                                                    str(current_row))
 
     if right_top_rect_coords in tile_arrays_by_grid_coords:
         return tile_arrays_by_grid_coords[right_top_rect_coords]
@@ -38,9 +43,9 @@ def get_left_bottom_rect(current_col, current_row, srtm_tile_v_cnt, tile_arrays_
     if current_row == srtm_tile_v_cnt:
         return cap_array
     else:
-        left_bottom_rect_coords = re.sub(r"^(\d+)", pad_number, str(current_col)) + "_" + re.sub(r"^(\d+)",
-                                                                                                 pad_number,
-                                                                                                 str(current_row + 1))
+        left_bottom_rect_coords = re.sub(r"^(\d+)", pad_number2, str(current_col)) + "_" + re.sub(r"^(\d+)",
+                                                                                                  pad_number2,
+                                                                                                  str(current_row + 1))
 
     if left_bottom_rect_coords in tile_arrays_by_grid_coords:
         return tile_arrays_by_grid_coords[left_bottom_rect_coords]
@@ -55,13 +60,13 @@ def get_right_bottom_rect(current_col, current_row, srtm_tile_v_cnt, srtm_tile_h
 
     right_bottom_rect_coords = ""
     if current_col == srtm_tile_h_cnt:
-        right_bottom_rect_coords = re.sub(r"^(\d+)", pad_number, str(1)) + "_" + re.sub(r"^(\d+)",
-                                                                                        pad_number,
-                                                                                        str(current_row + 1))
+        right_bottom_rect_coords = re.sub(r"^(\d+)", pad_number2, str(1)) + "_" + re.sub(r"^(\d+)",
+                                                                                         pad_number2,
+                                                                                         str(current_row + 1))
     else:
-        right_bottom_rect_coords = re.sub(r"^(\d+)", pad_number, str(current_col + 1)) + "_" + re.sub(r"^(\d+)",
-                                                                                                      pad_number,
-                                                                                                      str(current_row + 1))
+        right_bottom_rect_coords = re.sub(r"^(\d+)", pad_number2, str(current_col + 1)) + "_" + re.sub(r"^(\d+)",
+                                                                                                       pad_number2,
+                                                                                                       str(current_row + 1))
 
     if right_bottom_rect_coords in tile_arrays_by_grid_coords:
         return tile_arrays_by_grid_coords[right_bottom_rect_coords]
@@ -83,8 +88,7 @@ def get_scale_in_degrees_and_rect_side_in_px(seconds_cnt):
 
 # The function takes big 2D array and returns smaller 2D array in according to passed sizes
 # If the function can't satisfy passed sizes of array, it returns array with less sizes
-def get_2D_array_from_bigger_2D_array(init_arr, left_border, top_border,
-                                      tile_size, overlap):
+def get_2D_array_from_bigger_2D_array(init_arr, left_border, top_border, tile_size, overlap):
     bottom_border = len(init_arr)
     if bottom_border - top_border > tile_size + overlap:
         bottom_border = top_border + tile_size + overlap
@@ -101,7 +105,6 @@ def get_2D_array_from_bigger_2D_array(init_arr, left_border, top_border,
 
 def get_2d_index_by_element_number(ncols, number):
     element_row = 0
-    element_col = 0
 
     while number > ncols:
         number -= ncols
@@ -109,7 +112,7 @@ def get_2d_index_by_element_number(ncols, number):
 
     element_col = number - 1
 
-    return (element_row, element_col)
+    return element_row, element_col
 
 
 def split_rect_in_defined_tiles(rects, tile_size, left_border, top_border, overlap):
@@ -137,14 +140,14 @@ def split_rect_in_defined_tiles(rects, tile_size, left_border, top_border, overl
             res_tiles += [get_2D_array_from_bigger_2D_array(entire_combined_rect, left_border + tile_size * j,
                                                             top_border + tile_size * i, tile_size, overlap)]
 
-    return (res_tiles, right_shift, bottom_shift, tiles_cnt_in_v_axis, tiles_cnt_in_h_axis)
+    return res_tiles, right_shift, bottom_shift, tiles_cnt_in_v_axis, tiles_cnt_in_h_axis
 
 
 def get_georeferencing_data(scale_in_deg, img_array, long_top_left, lat_top_left, long_delta, lat_delta, ncols, count):
     # get width and height of image array
     n_img_rows, n_img_cols = img_array.shape
 
-    # The shift is one tile side length in degrees. It's should be float value
+    # The shift is one tile side length in degrees. It should be float value
     shift = scale_in_deg
 
     img_row, img_col = get_2d_index_by_element_number(ncols, count)
@@ -154,7 +157,7 @@ def get_georeferencing_data(scale_in_deg, img_array, long_top_left, lat_top_left
     long_max_shifted = round(long_min_shifted + (long_delta * n_img_cols))
     lat_min_shifted = round(lat_max_shifted - (abs(lat_delta) * n_img_rows))
 
-    return (long_min_shifted, lat_max_shifted, long_max_shifted, lat_min_shifted)
+    return long_min_shifted, lat_max_shifted, long_max_shifted, lat_min_shifted
 
 
 def round_one_dim_array_to_default_scale(init_arr, init_arr_scale_in_deg):
@@ -199,19 +202,13 @@ def round_2D_array_to_default_scale(init_arr, init_arr_scale_in_deg):
 def plot_image_grid(images, gdal_current_ds, right_shift, bottom_shift, scale_in_deg, res_dict,
                     ncols, nrows, cmap='gist_earth'):
     """Plot a grid of images"""
-    #     if not ncols:
-    #     factors = [i for i in range(1, len(images)+1) if len(images) % i == 0]
-    #     ncols = factors[len(factors) // 2] if len(factors) else len(images) // 4 + 1
-    #     nrows = int(len(images) / ncols) + int(len(images) % ncols)
-    print("^", ncols, nrows)
-    #     ncols = int(math.sqrt(np.shape(images)[0]))
-    #     nrows = int(math.sqrt(np.shape(images)[1]))
+    # print("^", ncols, nrows)
+
     imgs = [images[i] if len(images) > i else None for i in range(nrows * ncols)]
     f, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows))
     axes = axes.flatten()[:len(imgs)]
 
     count = 1
-    default_scale_in_deg = 5
     default_scale_in_px = 1200
     long_min, long_delta, dxdy, lat_max, dydx, lat_delta = gdal_current_ds.GetGeoTransform()
 
@@ -233,12 +230,13 @@ def plot_image_grid(images, gdal_current_ds, right_shift, bottom_shift, scale_in
             #                 img = round_2D_array_to_default_scale(img, scale_in_deg)
 
             #             print("*", img.shape)
-            ax.imshow(img, cmap=cmap, extent=[long_min_shifted, long_max_shifted, lat_min_shifted, lat_max_shifted])
+            # ax.imshow(img, cmap=cmap, extent=[long_min_shifted, long_max_shifted, lat_min_shifted, lat_max_shifted])
             count += 1
 
             res_dict[(lat_max_shifted, lat_min_shifted, long_min_shifted, long_max_shifted)] = img
 
-    f.show()
+
+    # f.show()
 
 
 # Start of execution
@@ -247,19 +245,22 @@ def plot_image_grid(images, gdal_current_ds, right_shift, bottom_shift, scale_in
 def main():
     gdal.UseExceptions()
 
-    # gdal_ds = []
+    gdal_ds = []
+    h_start = 35
+    h_cnt = 1
     srtm_tile_h_cnt = 72
-    h_start = 50
-    srtm_tile_v_cnt = 5
+    v_start = 2
+    v_cnt = 2
+    srtm_tile_v_cnt = 24
 
     tile_arrays_by_grid_coords = {}
     tile_geodata_by_grid_coords = {}
     res_dict = {}
 
-    for v in range(srtm_tile_v_cnt, srtm_tile_v_cnt + 2):
-        for h in range(h_start, srtm_tile_h_cnt + 1):
-            v_num = re.sub(r"^(\d+)", pad_number, str(v))
-            h_num = re.sub(r"^(\d+)", pad_number, str(h))
+    for v in range(v_start, v_start + v_cnt):
+        for h in range(h_start, h_start + h_cnt):
+            v_num = re.sub(r"^(\d+)", pad_number2, str(v))
+            h_num = re.sub(r"^(\d+)", pad_number2, str(h))
 
             grid_coords = h_num + '_' + v_num
             path_to_dir = 'C:/Users/tum/Programming/srtm_data/' + grid_coords
@@ -273,7 +274,9 @@ def main():
                     ds = gdal.Open(path_to_file)
                     band = ds.GetRasterBand(1)
                     elevations = band.ReadAsArray()
-                    tile_arrays_by_grid_coords[grid_coords] = elevations
+                    tile_arrays_by_grid_coords[grid_coords] = np.asarray(get_2D_array_from_bigger_2D_array(elevations,
+                                                                                                           0, 0, 6000,
+                                                                                                           0))
                     tile_geodata_by_grid_coords[grid_coords] = ds
 
     rects = [[], [], [], []]
@@ -285,18 +288,21 @@ def main():
     prev_right_shift = 0
     prev_bottom_shift = 0
 
-    seconds_cnt = 6
+    seconds_cnt = 3
     scale_in_deg, rect_side_in_px = get_scale_in_degrees_and_rect_side_in_px(seconds_cnt)
 
-    for v in range(1, srtm_tile_v_cnt + 1):
+    for v in range(v_start, v_start + v_cnt + 1):
         prev_bottom_shift = bottom_shift
-        for h in range(1, srtm_tile_h_cnt + 1):
-            current_rect_row = re.sub(r"^(\d+)", pad_number, str(v))
-            current_rect_col = re.sub(r"^(\d+)", pad_number, str(h))
+        prev_right_shift = 0
+        for h in range(h_start, h_start + h_cnt + 1):
+            current_rect_row = re.sub(r"^(\d+)", pad_number2, str(v))
+            current_rect_col = re.sub(r"^(\d+)", pad_number2, str(h))
             current_rect_coords = current_rect_col + '_' + current_rect_row
 
             # 2.2
             if current_rect_coords in tile_arrays_by_grid_coords:
+                print("Current rect coords:", current_rect_coords)
+
                 rects[0] = tile_arrays_by_grid_coords[current_rect_coords]
                 # 2.3
                 rects[1] = get_right_top_rect(h, v, srtm_tile_h_cnt, tile_arrays_by_grid_coords, cap_array)
@@ -313,3 +319,59 @@ def main():
                                 prev_right_shift, prev_bottom_shift,
                                 scale_in_deg, res_dict, ncols, nrows)
                 prev_right_shift = right_shift
+
+
+# lat_max_shifted, lat_min_shifted, long_min_shifted, long_max_shifted
+
+    # res_arr = res_dict[]
+    #
+    #
+    # plt.imshow(res_arr, cmap='gist_earth')
+    # plt.show()
+
+    for key, value in res_dict.items():
+        print(key, np.shape(value))
+
+    get_hgt_file(res_dict)
+
+    # res_arr = res_dict[(55, 53, -10, -8)]
+    # res_arr = np.hstack(res_arr, res_dict[(55, 53, -8, -6)])
+
+# Algorithm of .hgt file creation:
+
+# if (file.open(QFile::ReadWrite)){
+#         for (uint lat_step = 0; lat_step < img_size; lat_step++){
+#             char row[img_size*2];
+#
+#             for (uint lon_step = 0; lon_step < img_size; lon_step++){
+#                 qint16 next;
+#                 next = get(/*img_size - 1 - */lat_step, lon_step);
+#                 row[2*lon_step]   = next >> 8;
+#                 row[2*lon_step+1] = next & 0xFF;
+#             }
+#             file.write((char*) row, img_size * 2);
+#         }
+#         file.close();
+
+
+def get_hgt_file(res_dict):
+    for coords, img in res_dict.items():
+        filename = "N" if coords[0] >= 0 else "S"
+        filename += re.sub(r"^(\d+)", pad_number2, str(abs(coords[0])))
+        filename += "E" if coords[2] >= 0 else "W"
+        filename += re.sub(r"^(\d+)", pad_number3, str(abs(coords[2])))
+
+        img_size = np.shape(res_dict[coords])[0]
+
+        with open('C:/Users/tum/Programming/res/' + filename + '.hgt', 'wb') as f:
+            for lat_step in range(0, img_size):
+                row = np.full(img_size * 2, 0)
+
+                for lon_step in range(0, img_size):
+                    m_next = np.int16(img[lat_step, lon_step])
+                    row[2 * lon_step] = m_next >> 8
+                    row[2 * lon_step + 1] = m_next & 0xFF
+
+                f.write(row)
+                # row.astype('int16').tofile(filename)
+
