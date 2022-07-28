@@ -226,17 +226,16 @@ def plot_image_grid(images, gdal_current_ds, right_shift, bottom_shift, scale_in
                 long_delta, lat_delta, ncols, count)
 
             # Here I need to round img if it has scale more than min scale (1 deg)
-            #             if(int(scale_in_deg) > 1):
-            #                 img = round_2D_array_to_default_scale(img, scale_in_deg)
+            if int(scale_in_deg) > 1:
+                img = round_2D_array_to_default_scale(img, scale_in_deg)
 
             #             print("*", img.shape)
-            # ax.imshow(img, cmap=cmap, extent=[long_min_shifted, long_max_shifted, lat_min_shifted, lat_max_shifted])
+            ax.imshow(img, cmap=cmap, extent=[long_min_shifted, long_max_shifted, lat_min_shifted, lat_max_shifted])
             count += 1
 
             res_dict[(lat_max_shifted, lat_min_shifted, long_min_shifted, long_max_shifted)] = img
 
-
-    # f.show()
+    f.show()
 
 
 # Start of execution
@@ -246,10 +245,10 @@ def main():
     gdal.UseExceptions()
 
     gdal_ds = []
-    h_start = 35
+    h_start = 40
     h_cnt = 1
     srtm_tile_h_cnt = 72
-    v_start = 2
+    v_start = 3
     v_cnt = 2
     srtm_tile_v_cnt = 24
 
@@ -263,7 +262,7 @@ def main():
             h_num = re.sub(r"^(\d+)", pad_number2, str(h))
 
             grid_coords = h_num + '_' + v_num
-            path_to_dir = 'C:/Users/tum/Programming/srtm_data/' + grid_coords
+            path_to_dir = 'C:/Users/tum/Programming/SRTM_data/srtm_data/' + grid_coords
 
             print(path_to_dir)
 
@@ -332,7 +331,10 @@ def main():
     for key, value in res_dict.items():
         print(key, np.shape(value))
 
-    get_hgt_file(res_dict)
+    # write_hgt_file(res_dict)
+
+    arr = np.full((1201, 1201), 0)
+    read_hgt_file('N50E015.hgt', res_dict, arr)
 
     # res_arr = res_dict[(55, 53, -10, -8)]
     # res_arr = np.hstack(res_arr, res_dict[(55, 53, -8, -6)])
@@ -354,24 +356,64 @@ def main():
 #         file.close();
 
 
-def get_hgt_file(res_dict):
+def write_hgt_file(res_dict):
     for coords, img in res_dict.items():
         filename = "N" if coords[0] >= 0 else "S"
         filename += re.sub(r"^(\d+)", pad_number2, str(abs(coords[0])))
         filename += "E" if coords[2] >= 0 else "W"
         filename += re.sub(r"^(\d+)", pad_number3, str(abs(coords[2])))
+        filename += '.hgt'
+        print(filename)
 
         img_size = np.shape(res_dict[coords])[0]
+        # print("img_size:", img_size)
 
-        with open('C:/Users/tum/Programming/res/' + filename + '.hgt', 'wb') as f:
+        with open('C:/Users/tum/Programming/SRTM_data/res/' + filename, 'wb') as f:
             for lat_step in range(0, img_size):
-                row = np.full(img_size * 2, 0)
-
+                row = np.full(img_size * 2, 0, dtype=np.int8)
                 for lon_step in range(0, img_size):
                     m_next = np.int16(img[lat_step, lon_step])
                     row[2 * lon_step] = m_next >> 8
                     row[2 * lon_step + 1] = m_next & 0xFF
 
-                f.write(row)
-                # row.astype('int16').tofile(filename)
+                print(row.astype('int8').tobytes()[0])
+                f.write(row.astype('int8').tobytes())
+                # row.astype('int8').tofile('C:/Users/tum/Programming/SRTM_data/res/' + filename)
+
+# if (file.open(QFile::ReadOnly)) {
+#         if (file.size() == 2884802){
+#             for (int lat_step = 0; lat_step < IMG_SIZE; lat_step++){
+#                 char row[IMG_SIZE * 2];
+#                 file.read ((char*) row, IMG_SIZE * 2);
+#                 for (int lon_step = 0; lon_step < IMG_SIZE - 1; lon_step++){
+#                     qint16 next;
+#                     char high = row[2*lon_step];
+#                     unsigned char low = row[2*lon_step+1];
+#                     next = (high >= 0) ? (high * 256 + low) : -(-high * 256 + -low);
+#                     if (next == 255){
+#                         only_255++;
+#                         //next = 0;
+#                     }
+#                     this->set(/*IMG_SIZE - 1 -*/ lat_step, lon_step, next);
+#
+#                 }
+#             }
+#         }
+#         file.close();
+
+
+def read_hgt_file(filename, res_dict, arr):
+    for coords, img in res_dict.items():
+        img_size = np.shape(res_dict[coords])[0]
+
+        with open('C:/Users/tum/Programming/SRTM_data/res/' + filename, 'rb') as f:
+            for lat_step in range(0, img_size):
+                row = np.full(img_size * 2, 0, dtype=np.int8)
+                row = f.readline()
+                for lon_step in range(0, img_size):
+                    m_next = np.int16(img[lat_step, lon_step])
+                    high = row[2 * lon_step]
+                    low = np.uint8(row[2 * lon_step + 1])
+                    m_next = high * 256 + low if high >= 0 else -((-high * 256) + (-low))
+                    arr[lat_step, lon_step] = m_next
 

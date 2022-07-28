@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import threading
 
 import get_relief_data as relief
-import downdoad_srtm_data as d_srtm
+# import downdoad_srtm_data as d_srtm
 
 relief.main()
 
