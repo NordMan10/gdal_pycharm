@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import os
 import re
 
+import progress_bar as pb
+
 
 def test1():
     print("Hello")
@@ -143,7 +145,7 @@ def split_rect_in_defined_tiles(rects, tile_size, left_border, top_border, overl
     return res_tiles, right_shift, bottom_shift, tiles_cnt_in_v_axis, tiles_cnt_in_h_axis
 
 
-def get_georeferencing_data(scale_in_deg, img_array, long_top_left, lat_top_left, long_delta, lat_delta, ncols, count):
+def get_shifted_coords(scale_in_deg, img_array, long_top_left, lat_top_left, long_delta, lat_delta, ncols, count):
     # get width and height of image array
     n_img_rows, n_img_cols = img_array.shape
 
@@ -205,56 +207,65 @@ def plot_image_grid(images, gdal_current_ds, right_shift, bottom_shift, scale_in
     # print("^", ncols, nrows)
 
     imgs = [images[i] if len(images) > i else None for i in range(nrows * ncols)]
-    f, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows))
-    axes = axes.flatten()[:len(imgs)]
+    # f, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows))
+    # axes = axes.flatten()[:len(imgs)]
 
     count = 1
     default_scale_in_px = 1200
     long_min, long_delta, dxdy, lat_max, dydx, lat_delta = gdal_current_ds.GetGeoTransform()
 
-    long_top_left = long_min + (right_shift / default_scale_in_px)
-    lat_top_left = lat_max - (bottom_shift / default_scale_in_px)
+    long_left = long_min + (right_shift / default_scale_in_px)
+    lat_top = lat_max - (bottom_shift / default_scale_in_px)
+    # lat_bottom = lat_max - scale_in_deg
 
-    for img, ax in zip(imgs, axes.flatten()):
+    for img in imgs:
         if np.any(img):
             if len(img.shape) > 2 and img.shape[2] == 1:
                 img = img.squeeze()
 
-            ax.title.set_text(count)
-            long_min_shifted, lat_max_shifted, long_max_shifted, lat_min_shifted = get_georeferencing_data(
-                scale_in_deg, img, long_top_left, lat_top_left,
+            long_min_shifted, lat_max_shifted, long_max_shifted, lat_min_shifted = get_shifted_coords(
+                scale_in_deg, img, long_left, lat_top,
                 long_delta, lat_delta, ncols, count)
+            count += 1
 
             # Here I need to round img if it has scale more than min scale (1 deg)
             if int(scale_in_deg) > 1:
                 img = round_2D_array_to_default_scale(img, scale_in_deg)
 
-            #             print("*", img.shape)
-            ax.imshow(img, cmap=cmap, extent=[long_min_shifted, long_max_shifted, lat_min_shifted, lat_max_shifted])
-            count += 1
-
             res_dict[(lat_max_shifted, lat_min_shifted, long_min_shifted, long_max_shifted)] = img
 
-    f.show()
+    # for img, ax in zip(imgs, axes.flatten()):
+    #     if np.any(img):
+    #         if len(img.shape) > 2 and img.shape[2] == 1:
+    #             img = img.squeeze()
+    #
+    #         ax.title.set_text(count)
+    #         long_min_shifted, lat_max_shifted, long_max_shifted, lat_min_shifted = get_shifted_coords(
+    #             scale_in_deg, img, long_left, lat_top,
+    #             long_delta, lat_delta, ncols, count)
+    #
+    #         # Here I need to round img if it has scale more than min scale (1 deg)
+    #         if int(scale_in_deg) > 1:
+    #             img = round_2D_array_to_default_scale(img, scale_in_deg)
+    #
+    #         ax.imshow(img, cmap=cmap, extent=[long_min_shifted, long_max_shifted, lat_min_shifted, lat_max_shifted])
+    #         count += 1
+    #
+    #         res_dict[(lat_max_shifted, lat_min_shifted, long_min_shifted, long_max_shifted)] = img
+    #
+    # f.show()
 
 
 # Start of execution
 
-
-def main():
+def main(scale_in_sec, h_start, h_cnt, v_start, v_cnt, total_counter):
     gdal.UseExceptions()
 
-    gdal_ds = []
-    h_start = 40
-    h_cnt = 1
     srtm_tile_h_cnt = 72
-    v_start = 3
-    v_cnt = 2
     srtm_tile_v_cnt = 24
 
     tile_arrays_by_grid_coords = {}
     tile_geodata_by_grid_coords = {}
-    res_dict = {}
 
     for v in range(v_start, v_start + v_cnt):
         for h in range(h_start, h_start + h_cnt):
@@ -264,12 +275,13 @@ def main():
             grid_coords = h_num + '_' + v_num
             path_to_dir = 'C:/Users/tum/Programming/SRTM_data/srtm_data/' + grid_coords
 
-            print(path_to_dir)
-
             path_to_file = path_to_dir + '/srtm_' + grid_coords + '.tif'
 
             if os.path.isdir(path_to_dir):
                 if os.path.isfile(path_to_file):
+                    print(path_to_file)
+                    total_counter.increment()
+
                     ds = gdal.Open(path_to_file)
                     band = ds.GetRasterBand(1)
                     elevations = band.ReadAsArray()
@@ -278,17 +290,18 @@ def main():
                                                                                                            0))
                     tile_geodata_by_grid_coords[grid_coords] = ds
 
+    pb.printProgressBar(0, total_counter.get(), prefix='Progress:', suffix='Complete', length=50)
+
     rects = [[], [], [], []]
     cap_array = np.full((6000, 6000), -32768)
 
     right_shift = 0
     bottom_shift = 0
-
     prev_right_shift = 0
     prev_bottom_shift = 0
 
-    seconds_cnt = 3
-    scale_in_deg, rect_side_in_px = get_scale_in_degrees_and_rect_side_in_px(seconds_cnt)
+    scale_in_deg, rect_side_in_px = get_scale_in_degrees_and_rect_side_in_px(scale_in_sec)
+    res_dict = {}
 
     for v in range(v_start, v_start + v_cnt + 1):
         prev_bottom_shift = bottom_shift
@@ -298,18 +311,15 @@ def main():
             current_rect_col = re.sub(r"^(\d+)", pad_number2, str(h))
             current_rect_coords = current_rect_col + '_' + current_rect_row
 
-            # 2.2
             if current_rect_coords in tile_arrays_by_grid_coords:
-                print("Current rect coords:", current_rect_coords)
+                # print("Current rect coords:", current_rect_coords)
 
                 rects[0] = tile_arrays_by_grid_coords[current_rect_coords]
-                # 2.3
                 rects[1] = get_right_top_rect(h, v, srtm_tile_h_cnt, tile_arrays_by_grid_coords, cap_array)
                 rects[2] = get_left_bottom_rect(h, v, srtm_tile_v_cnt, tile_arrays_by_grid_coords, cap_array)
                 rects[3] = get_right_bottom_rect(h, v, srtm_tile_v_cnt, srtm_tile_h_cnt,
                                                  tile_arrays_by_grid_coords, cap_array)
 
-                # 2.4
                 tiles, right_shift, bottom_shift, nrows, ncols = split_rect_in_defined_tiles(rects,
                                                                                              int(rect_side_in_px),
                                                                                              prev_right_shift,
@@ -319,25 +329,10 @@ def main():
                                 scale_in_deg, res_dict, ncols, nrows)
                 prev_right_shift = right_shift
 
+    # for key, value in res_dict.items():
+    #     print(key, np.shape(value))
 
-# lat_max_shifted, lat_min_shifted, long_min_shifted, long_max_shifted
-
-    # res_arr = res_dict[]
-    #
-    #
-    # plt.imshow(res_arr, cmap='gist_earth')
-    # plt.show()
-
-    for key, value in res_dict.items():
-        print(key, np.shape(value))
-
-    # write_hgt_file(res_dict)
-
-    arr = np.full((1201, 1201), 0)
-    read_hgt_file('N50E015.hgt', res_dict, arr)
-
-    # res_arr = res_dict[(55, 53, -10, -8)]
-    # res_arr = np.hstack(res_arr, res_dict[(55, 53, -8, -6)])
+    return res_dict
 
 # Algorithm of .hgt file creation:
 
@@ -356,29 +351,36 @@ def main():
 #         file.close();
 
 
-def write_hgt_file(res_dict):
+def get_filename_by_coords(lat, lon):
+    filename = "N" if lat >= 0 else "S"
+    filename += re.sub(r"^(\d+)", pad_number2, str(abs(lat)))
+    filename += "E" if lon >= 0 else "W"
+    filename += re.sub(r"^(\d+)", pad_number3, str(abs(lon)))
+    filename += '.hgt'
+
+    return filename
+
+
+def write_hgt_file(res_dict, total_counter, progress_counter):
     for coords, img in res_dict.items():
-        filename = "N" if coords[0] >= 0 else "S"
-        filename += re.sub(r"^(\d+)", pad_number2, str(abs(coords[0])))
-        filename += "E" if coords[2] >= 0 else "W"
-        filename += re.sub(r"^(\d+)", pad_number3, str(abs(coords[2])))
-        filename += '.hgt'
-        print(filename)
-
+        filename = get_filename_by_coords(coords[1], coords[2])
         img_size = np.shape(res_dict[coords])[0]
-        # print("img_size:", img_size)
 
+        # print(filename)
         with open('C:/Users/tum/Programming/SRTM_data/res/' + filename, 'wb') as f:
             for lat_step in range(0, img_size):
                 row = np.full(img_size * 2, 0, dtype=np.int8)
                 for lon_step in range(0, img_size):
                     m_next = np.int16(img[lat_step, lon_step])
                     row[2 * lon_step] = m_next >> 8
-                    row[2 * lon_step + 1] = m_next & 0xFF
+                    row[2 * lon_step + 1] = (m_next & 0xFF)
 
-                print(row.astype('int8').tobytes()[0])
                 f.write(row.astype('int8').tobytes())
                 # row.astype('int8').tofile('C:/Users/tum/Programming/SRTM_data/res/' + filename)
+    progress_counter.increment()
+
+    pb.printProgressBar(progress_counter.get(), total_counter.get(), prefix='Progress:', suffix='Complete', length=50)
+
 
 # if (file.open(QFile::ReadOnly)) {
 #         if (file.size() == 2884802){
@@ -402,18 +404,28 @@ def write_hgt_file(res_dict):
 #         file.close();
 
 
-def read_hgt_file(filename, res_dict, arr):
-    for coords, img in res_dict.items():
-        img_size = np.shape(res_dict[coords])[0]
+# def get_coords_by_filename(filename):
+#     coords =
 
-        with open('C:/Users/tum/Programming/SRTM_data/res/' + filename, 'rb') as f:
-            for lat_step in range(0, img_size):
-                row = np.full(img_size * 2, 0, dtype=np.int8)
-                row = f.readline()
-                for lon_step in range(0, img_size):
-                    m_next = np.int16(img[lat_step, lon_step])
-                    high = row[2 * lon_step]
-                    low = np.uint8(row[2 * lon_step + 1])
-                    m_next = high * 256 + low if high >= 0 else -((-high * 256) + (-low))
-                    arr[lat_step, lon_step] = m_next
+
+def read_hgt_file(filename, img_size, res_arr):
+    # for coords, img in res_dict.items():
+    #     img_size = np.shape(res_dict[coords])[0]
+    # print(filename)
+
+    with open('C:/Users/tum/Programming/SRTM_data/res/' + filename, 'rb') as f:
+        for lat_step in range(0, img_size):
+            row = np.full(img_size * 2, 0, dtype=np.int8)
+            row = f.read(img_size * 2)
+            for lon_step in range(0, img_size - 1):
+                m_next = np.int16()
+                high = row[2 * lon_step]
+                low = np.uint8(row[2 * lon_step + 1])
+                m_next = high * 256 + low if high >= 0 else -((-high * 256) + (-low))
+                res_arr[lat_step, lon_step] = m_next
+
+
+
+    plt.imshow(res_arr, cmap='gist_earth')
+    plt.show()
 
