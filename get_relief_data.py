@@ -90,7 +90,7 @@ def get_scale_in_degrees_and_rect_side_in_px(seconds_cnt):
 
 # The function takes big 2D array and returns smaller 2D array in according to passed sizes
 # If the function can't satisfy passed sizes of array, it returns array with less sizes
-def get_2D_array_from_bigger_2D_array(init_arr, left_border, top_border, tile_size, overlap):
+def get_2d_array_from_bigger_2d_array(init_arr, left_border, top_border, tile_size, overlap):
     bottom_border = len(init_arr)
     if bottom_border - top_border > tile_size + overlap:
         bottom_border = top_border + tile_size + overlap
@@ -139,7 +139,7 @@ def split_rect_in_defined_tiles(rects, tile_size, left_border, top_border, overl
 
     for i in range(tiles_cnt_in_v_axis):
         for j in range(tiles_cnt_in_h_axis):
-            res_tiles += [get_2D_array_from_bigger_2D_array(entire_combined_rect, left_border + tile_size * j,
+            res_tiles += [get_2d_array_from_bigger_2d_array(entire_combined_rect, left_border + tile_size * j,
                                                             top_border + tile_size * i, tile_size, overlap)]
 
     return res_tiles, right_shift, bottom_shift, tiles_cnt_in_v_axis, tiles_cnt_in_h_axis
@@ -176,29 +176,37 @@ def round_one_dim_array_to_default_scale(init_arr, init_arr_scale_in_deg):
     return rounded_arr
 
 
-def round_2D_array_to_default_scale(init_arr, init_arr_scale_in_deg):
+def round_2d_array_to_default_scale(init_arr, round_number):
     rounded_arr = []
     init_arr_side = np.shape(init_arr)[0]
 
     # rows (vertical direction)
-    for i in range(0, init_arr_side - 1, int(init_arr_scale_in_deg)):
+    for i in range(0, init_arr_side - 1, int(round_number)):
         temp_arr = []
         # cols (horizontal direction)
-        for j in range(0, init_arr_side - 1, int(init_arr_scale_in_deg)):
+        for j in range(0, init_arr_side - 1, int(round_number)):
             average = 0
-            for inner_i in range(i, i + int(init_arr_scale_in_deg)):
-                for inner_j in range(j, j + int(init_arr_scale_in_deg)):
+            for inner_i in range(i, i + int(round_number)):
+                for inner_j in range(j, j + int(round_number)):
                     average += init_arr[inner_i][inner_j]
-            average /= int(init_arr_scale_in_deg) ** 2
+            average /= int(round_number) ** 2
             temp_arr.append(average)
         temp_arr.append(init_arr[i][init_arr_side - 1])
         rounded_arr += [temp_arr]
 
-    last_rounded_row = round_one_dim_array_to_default_scale(init_arr[init_arr_side - 1], init_arr_scale_in_deg)
+    last_rounded_row = round_one_dim_array_to_default_scale(init_arr[init_arr_side - 1], round_number)
     last_rounded_row.append(init_arr[init_arr_side - 1][init_arr_side - 1])
     rounded_arr += [last_rounded_row]
 
     return np.asarray(rounded_arr)
+
+
+def replace_nodata_value_in_array(array):
+    for i in range(len(array)):
+        for j in range(len(array)):
+            if array[i][j] == -32768:
+                array[i][j] = 0
+                # print('Zero!')
 
 
 def plot_image_grid(images, gdal_current_ds, right_shift, bottom_shift, scale_in_deg, res_dict,
@@ -216,12 +224,13 @@ def plot_image_grid(images, gdal_current_ds, right_shift, bottom_shift, scale_in
 
     long_left = long_min + (right_shift / default_scale_in_px)
     lat_top = lat_max - (bottom_shift / default_scale_in_px)
-    # lat_bottom = lat_max - scale_in_deg
 
     for img in imgs:
         if np.any(img):
             if len(img.shape) > 2 and img.shape[2] == 1:
                 img = img.squeeze()
+
+            replace_nodata_value_in_array(img)
 
             long_min_shifted, lat_max_shifted, long_max_shifted, lat_min_shifted = get_shifted_coords(
                 scale_in_deg, img, long_left, lat_top,
@@ -230,7 +239,7 @@ def plot_image_grid(images, gdal_current_ds, right_shift, bottom_shift, scale_in
 
             # Here I need to round img if it has scale more than min scale (1 deg)
             if int(scale_in_deg) > 1:
-                img = round_2D_array_to_default_scale(img, scale_in_deg)
+                img = round_2d_array_to_default_scale(img, scale_in_deg)
 
             res_dict[(lat_max_shifted, lat_min_shifted, long_min_shifted, long_max_shifted)] = img
 
@@ -285,15 +294,16 @@ def main(scale_in_sec, h_start, h_cnt, v_start, v_cnt, total_counter):
                     ds = gdal.Open(path_to_file)
                     band = ds.GetRasterBand(1)
                     elevations = band.ReadAsArray()
-                    tile_arrays_by_grid_coords[grid_coords] = np.asarray(get_2D_array_from_bigger_2D_array(elevations,
+                    tile_arrays_by_grid_coords[grid_coords] = np.asarray(get_2d_array_from_bigger_2d_array(elevations,
                                                                                                            0, 0, 6000,
                                                                                                            0))
                     tile_geodata_by_grid_coords[grid_coords] = ds
 
     pb.printProgressBar(0, total_counter.get(), prefix='Progress:', suffix='Complete', length=50)
+    print('\n' + str(total_counter.get()))
 
     rects = [[], [], [], []]
-    cap_array = np.full((6000, 6000), -32768)
+    cap_array = np.full((6000, 6000), 0)
 
     right_shift = 0
     bottom_shift = 0
@@ -377,9 +387,9 @@ def write_hgt_file(res_dict, total_counter, progress_counter):
 
                 f.write(row.astype('int8').tobytes())
                 # row.astype('int8').tofile('C:/Users/tum/Programming/SRTM_data/res/' + filename)
-    progress_counter.increment()
-
-    pb.printProgressBar(progress_counter.get(), total_counter.get(), prefix='Progress:', suffix='Complete', length=50)
+        progress_counter.increment()
+        pb.printProgressBar(progress_counter.get(), total_counter.get() * 25, prefix='Progress:', suffix='Complete',
+                            length=50)
 
 
 # if (file.open(QFile::ReadOnly)) {
@@ -408,11 +418,8 @@ def write_hgt_file(res_dict, total_counter, progress_counter):
 #     coords =
 
 
-def read_hgt_file(filename, img_size, res_arr):
-    # for coords, img in res_dict.items():
-    #     img_size = np.shape(res_dict[coords])[0]
-    # print(filename)
 
+def read_hgt_file(filename, img_size, res_arr):
     with open('C:/Users/tum/Programming/SRTM_data/res/' + filename, 'rb') as f:
         for lat_step in range(0, img_size):
             row = np.full(img_size * 2, 0, dtype=np.int8)
@@ -424,8 +431,7 @@ def read_hgt_file(filename, img_size, res_arr):
                 m_next = high * 256 + low if high >= 0 else -((-high * 256) + (-low))
                 res_arr[lat_step, lon_step] = m_next
 
-
-
-    plt.imshow(res_arr, cmap='gist_earth')
-    plt.show()
+    return res_arr
+    # plt.imshow(res_arr, cmap='gist_earth')
+    # plt.show()
 
