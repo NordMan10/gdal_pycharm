@@ -32,21 +32,21 @@ def get_relief_files(scale_in_sec, h_start, h_cnt, v_start, v_cnt, total_counter
     relief.write_hgt_file(res_dict, total_counter, progress_counter)
 
 
-h_start = 1
+# h_start = 1
 # h_cnt = 1
-v_start = 1
+v_start = 4
 v_cnt = 1
 
 scale_in_sec = 3
 
-thread1 = threading.Thread(target=get_relief_files, args=(scale_in_sec, 1, 18, v_start, v_cnt, total_counter,
+thread1 = threading.Thread(target=get_relief_files, args=(scale_in_sec, 1, 36, v_start, v_cnt, total_counter,
                                                           progress_counter))
-thread2 = threading.Thread(target=get_relief_files, args=(scale_in_sec, 19, 18, v_start, v_cnt, total_counter,
+thread2 = threading.Thread(target=get_relief_files, args=(scale_in_sec, 37, 36, v_start, v_cnt, total_counter,
                                                           progress_counter))
-thread3 = threading.Thread(target=get_relief_files, args=(scale_in_sec, 37, 18, v_start, v_cnt, total_counter,
-                                                          progress_counter))
-thread4 = threading.Thread(target=get_relief_files, args=(scale_in_sec, 55, 18, v_start, v_cnt, total_counter,
-                                                          progress_counter))
+# thread3 = threading.Thread(target=get_relief_files, args=(scale_in_sec, 37, 18, v_start, v_cnt, total_counter,
+#                                                           progress_counter))
+# thread4 = threading.Thread(target=get_relief_files, args=(scale_in_sec, 55, 18, v_start, v_cnt, total_counter,
+#                                                           progress_counter))
 # thread5 = threading.Thread(target=get_relief_files, args=(scale_in_sec, 33, 8, v_start, v_cnt, total_counter,
 #                                                           progress_counter))
 # thread6 = threading.Thread(target=get_relief_files, args=(scale_in_sec, 41, 8, v_start, v_cnt, total_counter,
@@ -61,16 +61,22 @@ thread4 = threading.Thread(target=get_relief_files, args=(scale_in_sec, 55, 18, 
 start_time = get_time.get_current_time()
 print(start_time)
 
-thread1.start()
-thread2.start()
-thread3.start()
-thread4.start()
+# thread1.start()
+# thread2.start()
+# thread3.start()
+# thread4.start()
 # thread5.start()
 # thread6.start()
 # thread7.start()
 # thread8.start()
 # thread9.start()
-if progress_counter.get() == total_counter.get() and progress_counter.get() > 0:
+
+# thread1.join()
+# thread2.join()
+# thread3.join()
+# thread4.join()
+
+if progress_counter.get() == total_counter.get() * 25 and progress_counter.get() > 0:
     end_time = get_time.get_current_time()
     print(end_time + '\n')
     get_time.get_time_interval(start_time, end_time)
@@ -79,7 +85,7 @@ if progress_counter.get() == total_counter.get() and progress_counter.get() > 0:
 # python C:/Users/tum/PycharmProjects/gdal_pycharm/main.py
 
 # res_arr = np.full((1201, 1201), 0)
-# res1 = relief.read_hgt_file('N45W080.hgt', 1201, res_arr)
+# res1 = relief.read_hgt_file('N54W070.hgt', 1201, res_arr)
 # plt.imshow(res1, cmap='gist_earth')
 # plt.show()
 #
@@ -92,24 +98,25 @@ if progress_counter.get() == total_counter.get() and progress_counter.get() > 0:
 # print(res2[100][:1000])
 
 ''' Tiff image check'''
-# path_to_file = 'C:/Users/tum/Programming/SRTM_data/Aster GDEM V3 data/data/ASTGTMV003_N60E004_dem.tif'
+path_to_file = 'C:/Users/tum/Programming/SRTM_data/Aster GDEM V3 data/data/ASTGTMV003_N73E058_dem.tif'
+path_to_file2 = 'C:/Users/tum/Programming/SRTM_data/srtm_data/22_24/srtm_22_24.tif'
+
+ds = gdal.Open(path_to_file2)
+band = ds.GetRasterBand(1)
+elevations = band.ReadAsArray()
+# elevations = relief.round_2d_array_to_default_scale(elevations, 3)
 #
-# ds = gdal.Open(path_to_file)
-# band = ds.GetRasterBand(1)
-# elevations = band.ReadAsArray()
-# rounded_elevations = relief.round_2d_array_to_default_scale(elevations, 3)
+print(elevations.shape)
 #
-# print(elevations.shape)
+relief.replace_nodata_value_in_array(elevations)
+long_min, long_delta, dxdy, lat_max, dydx, lat_delta = ds.GetGeoTransform()
+print(lat_max, long_min)
 #
-# # relief.replace_nodata_value_in_array(elevations)
-# long_min, long_delta, dxdy, lat_max, dydx, lat_delta = ds.GetGeoTransform()
-# print(long_min, lat_max)
+print(elevations[1000][:1000])
 #
-# print(elevations[1000][:1000])
-#
-# plt.imshow(elevations, cmap='gist_earth')
+plt.imshow(elevations, cmap='gist_earth')
 # # , extent=[long_min, long_min + 1, lat_max - 1, lat_max]
-# plt.show()
+plt.show()
 
 
 

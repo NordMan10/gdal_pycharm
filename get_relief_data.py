@@ -77,10 +77,8 @@ def get_right_bottom_rect(current_col, current_row, srtm_tile_v_cnt, srtm_tile_h
 
 
 def get_scale_in_degrees_and_rect_side_in_px(seconds_cnt):
-    # constants
     min_scale = 3
     default_pixel_num = 1200
-    overlap_pixel_num = 1
 
     scale_in_degrees = seconds_cnt / min_scale
     rect_side = default_pixel_num * scale_in_degrees
@@ -265,14 +263,35 @@ def plot_image_grid(images, gdal_current_ds, right_shift, bottom_shift, scale_in
     # f.show()
 
 
-# Start of execution
+def fill_dict_with_res_array(init_tiles, gdal_current_ds, right_shift, bottom_shift, scale_in_deg, res_dict,
+                             ncols, nrows):
 
-def main(scale_in_sec, h_start, h_cnt, v_start, v_cnt, total_counter):
+    tiles = [init_tiles[i] if len(init_tiles) > i else None for i in range(nrows * ncols)]
+
+    count = 1
+    default_scale_in_px = 1200
+    long_min, long_delta, dxdy, lat_max, dydx, lat_delta = gdal_current_ds.GetGeoTransform()
+
+    long_left = long_min + (right_shift / default_scale_in_px)
+    lat_top = lat_max - (bottom_shift / default_scale_in_px)
+
+    for tile in tiles:
+        replace_nodata_value_in_array(tile)
+
+        long_min_shifted, lat_max_shifted, long_max_shifted, lat_min_shifted = get_shifted_coords(
+            scale_in_deg, tile, long_left, lat_top,
+            long_delta, lat_delta, ncols, count)
+        count += 1
+
+        # Here I need to round img if it has scale more than min scale (1 deg)
+        if int(scale_in_deg) > 1:
+            tile = round_2d_array_to_default_scale(tile, scale_in_deg)
+
+        res_dict[(lat_max_shifted, lat_min_shifted, long_min_shifted, long_max_shifted)] = tile
+
+
+def get_tile_arrays_and_coords_by_grid_coords(h_start, h_cnt, v_start, v_cnt, total_counter):
     gdal.UseExceptions()
-
-    srtm_tile_h_cnt = 72
-    srtm_tile_v_cnt = 24
-
     tile_arrays_by_grid_coords = {}
     tile_geodata_by_grid_coords = {}
 
@@ -280,38 +299,44 @@ def main(scale_in_sec, h_start, h_cnt, v_start, v_cnt, total_counter):
         for h in range(h_start, h_start + h_cnt):
             v_num = re.sub(r"^(\d+)", pad_number2, str(v))
             h_num = re.sub(r"^(\d+)", pad_number2, str(h))
-
             grid_coords = h_num + '_' + v_num
-            path_to_dir = 'C:/Users/tum/Programming/SRTM_data/srtm_data/' + grid_coords
 
-            path_to_file = path_to_dir + '/srtm_' + grid_coords + '.tif'
+            path_to_file = 'C:/Users/tum/Programming/SRTM_data/srtm_data/' + grid_coords + \
+                           '/srtm_' + grid_coords + '.tif'
 
-            if os.path.isdir(path_to_dir):
-                if os.path.isfile(path_to_file):
-                    print(path_to_file)
-                    total_counter.increment()
+            if os.path.isfile(path_to_file):
+                print(path_to_file)
+                total_counter.increment()
 
-                    ds = gdal.Open(path_to_file)
-                    band = ds.GetRasterBand(1)
-                    elevations = band.ReadAsArray()
-                    tile_arrays_by_grid_coords[grid_coords] = np.asarray(get_2d_array_from_bigger_2d_array(elevations,
-                                                                                                           0, 0, 6000,
-                                                                                                           0))
-                    tile_geodata_by_grid_coords[grid_coords] = ds
+                ds = gdal.Open(path_to_file)
+                band = ds.GetRasterBand(1)
+                elevations = band.ReadAsArray()
+                tile_arrays_by_grid_coords[grid_coords] = np.asarray(
+                    get_2d_array_from_bigger_2d_array(elevations, 0, 0, 6000, 0))
+                tile_geodata_by_grid_coords[grid_coords] = ds
 
-    pb.printProgressBar(0, total_counter.get(), prefix='Progress:', suffix='Complete', length=50)
-    print('\n' + str(total_counter.get()))
+    return tile_arrays_by_grid_coords, tile_geodata_by_grid_coords
 
+
+# Start of execution
+
+def main(scale_in_sec, h_start, h_cnt, v_start, v_cnt, total_counter):
+    # pb.printProgressBar(0, total_counter.get(), prefix='Progress:', suffix='Complete', length=50)
+    # print('\n' + str(total_counter.get()))
     rects = [[], [], [], []]
     cap_array = np.full((6000, 6000), 0)
 
-    right_shift = 0
-    bottom_shift = 0
-    prev_right_shift = 0
-    prev_bottom_shift = 0
+    srtm_tile_h_cnt = 72
+    srtm_tile_v_cnt = 24
+
+    right_shift, bottom_shift, prev_right_shift, prev_bottom_shift = 0, 0, 0, 0
 
     scale_in_deg, rect_side_in_px = get_scale_in_degrees_and_rect_side_in_px(scale_in_sec)
-    res_dict = {}
+
+    tile_arrays_by_grid_coords, tile_geodata_by_grid_coords = \
+        get_tile_arrays_and_coords_by_grid_coords(h_start, h_cnt, v_start, v_cnt, total_counter)
+
+    tiles_by_coords = {}
 
     for v in range(v_start, v_start + v_cnt + 1):
         prev_bottom_shift = bottom_shift
@@ -322,43 +347,20 @@ def main(scale_in_sec, h_start, h_cnt, v_start, v_cnt, total_counter):
             current_rect_coords = current_rect_col + '_' + current_rect_row
 
             if current_rect_coords in tile_arrays_by_grid_coords:
-                # print("Current rect coords:", current_rect_coords)
-
                 rects[0] = tile_arrays_by_grid_coords[current_rect_coords]
                 rects[1] = get_right_top_rect(h, v, srtm_tile_h_cnt, tile_arrays_by_grid_coords, cap_array)
                 rects[2] = get_left_bottom_rect(h, v, srtm_tile_v_cnt, tile_arrays_by_grid_coords, cap_array)
                 rects[3] = get_right_bottom_rect(h, v, srtm_tile_v_cnt, srtm_tile_h_cnt,
                                                  tile_arrays_by_grid_coords, cap_array)
 
-                tiles, right_shift, bottom_shift, nrows, ncols = split_rect_in_defined_tiles(rects,
-                                                                                             int(rect_side_in_px),
-                                                                                             prev_right_shift,
-                                                                                             prev_bottom_shift, 1)
-                plot_image_grid(np.array(tiles), tile_geodata_by_grid_coords[current_rect_coords],
-                                prev_right_shift, prev_bottom_shift,
-                                scale_in_deg, res_dict, ncols, nrows)
+                tiles, right_shift, bottom_shift, nrows, ncols = \
+                    split_rect_in_defined_tiles(rects, int(rect_side_in_px), prev_right_shift, prev_bottom_shift, 1)
+
+                fill_dict_with_res_array(np.array(tiles), tile_geodata_by_grid_coords[current_rect_coords],
+                                         prev_right_shift, prev_bottom_shift, scale_in_deg, tiles_by_coords, ncols, nrows)
                 prev_right_shift = right_shift
 
-    # for key, value in res_dict.items():
-    #     print(key, np.shape(value))
-
-    return res_dict
-
-# Algorithm of .hgt file creation:
-
-# if (file.open(QFile::ReadWrite)){
-#         for (uint lat_step = 0; lat_step < img_size; lat_step++){
-#             char row[img_size*2];
-#
-#             for (uint lon_step = 0; lon_step < img_size; lon_step++){
-#                 qint16 next;
-#                 next = get(/*img_size - 1 - */lat_step, lon_step);
-#                 row[2*lon_step]   = next >> 8;
-#                 row[2*lon_step+1] = next & 0xFF;
-#             }
-#             file.write((char*) row, img_size * 2);
-#         }
-#         file.close();
+    return tiles_by_coords
 
 
 def get_filename_by_coords(lat, lon):
@@ -376,8 +378,7 @@ def write_hgt_file(res_dict, total_counter, progress_counter):
         filename = get_filename_by_coords(coords[1], coords[2])
         img_size = np.shape(res_dict[coords])[0]
 
-        # print(filename)
-        with open('C:/Users/tum/Programming/SRTM_data/res/' + filename, 'wb') as f:
+        with open('C:/Users/tum/Programming/SRTM_data/res/N39-35/' + filename, 'wb') as f:
             for lat_step in range(0, img_size):
                 row = np.full(img_size * 2, 0, dtype=np.int8)
                 for lon_step in range(0, img_size):
@@ -386,37 +387,9 @@ def write_hgt_file(res_dict, total_counter, progress_counter):
                     row[2 * lon_step + 1] = (m_next & 0xFF)
 
                 f.write(row.astype('int8').tobytes())
-                # row.astype('int8').tofile('C:/Users/tum/Programming/SRTM_data/res/' + filename)
         progress_counter.increment()
         pb.printProgressBar(progress_counter.get(), total_counter.get() * 25, prefix='Progress:', suffix='Complete',
                             length=50)
-
-
-# if (file.open(QFile::ReadOnly)) {
-#         if (file.size() == 2884802){
-#             for (int lat_step = 0; lat_step < IMG_SIZE; lat_step++){
-#                 char row[IMG_SIZE * 2];
-#                 file.read ((char*) row, IMG_SIZE * 2);
-#                 for (int lon_step = 0; lon_step < IMG_SIZE - 1; lon_step++){
-#                     qint16 next;
-#                     char high = row[2*lon_step];
-#                     unsigned char low = row[2*lon_step+1];
-#                     next = (high >= 0) ? (high * 256 + low) : -(-high * 256 + -low);
-#                     if (next == 255){
-#                         only_255++;
-#                         //next = 0;
-#                     }
-#                     this->set(/*IMG_SIZE - 1 -*/ lat_step, lon_step, next);
-#
-#                 }
-#             }
-#         }
-#         file.close();
-
-
-# def get_coords_by_filename(filename):
-#     coords =
-
 
 
 def read_hgt_file(filename, img_size, res_arr):
