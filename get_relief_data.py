@@ -8,10 +8,6 @@ import re
 import progress_bar as pb
 
 
-def test1():
-    print("Hello")
-
-
 def pad_number2(match):
     number = int(match.group(1))
     return format(number, "02d")
@@ -200,11 +196,7 @@ def round_2d_array_to_default_scale(init_arr, round_number):
 
 
 def replace_nodata_value_in_array(array):
-    for i in range(len(array)):
-        for j in range(len(array)):
-            if array[i][j] == -32768:
-                array[i][j] = 0
-                # print('Zero!')
+    np.clip(array, 0, 32768)
 
 
 def plot_image_grid(images, gdal_current_ds, right_shift, bottom_shift, scale_in_deg, res_dict,
@@ -291,7 +283,6 @@ def fill_dict_with_res_array(init_tiles, gdal_current_ds, right_shift, bottom_sh
 
 
 def get_tile_arrays_and_coords_by_grid_coords(h_start, h_cnt, v_start, v_cnt, total_counter):
-    gdal.UseExceptions()
     tile_arrays_by_grid_coords = {}
     tile_geodata_by_grid_coords = {}
 
@@ -311,9 +302,12 @@ def get_tile_arrays_and_coords_by_grid_coords(h_start, h_cnt, v_start, v_cnt, to
                 ds = gdal.Open(path_to_file)
                 band = ds.GetRasterBand(1)
                 elevations = band.ReadAsArray()
-                tile_arrays_by_grid_coords[grid_coords] = np.asarray(
-                    get_2d_array_from_bigger_2d_array(elevations, 0, 0, 6000, 0))
+                tile_arrays_by_grid_coords[grid_coords] = elevations
+                # print('*')
+                # tile_arrays_by_grid_coords[grid_coords] = np.asarray(
+                #     get_2d_array_from_bigger_2d_array(elevations, 0, 0, 6000, 0))
                 tile_geodata_by_grid_coords[grid_coords] = ds
+                # print('/')
 
     return tile_arrays_by_grid_coords, tile_geodata_by_grid_coords
 
@@ -323,6 +317,8 @@ def get_tile_arrays_and_coords_by_grid_coords(h_start, h_cnt, v_start, v_cnt, to
 def main(scale_in_sec, h_start, h_cnt, v_start, v_cnt, total_counter):
     # pb.printProgressBar(0, total_counter.get(), prefix='Progress:', suffix='Complete', length=50)
     # print('\n' + str(total_counter.get()))
+    gdal.UseExceptions()
+
     rects = [[], [], [], []]
     cap_array = np.full((6000, 6000), 0)
 
@@ -355,7 +351,6 @@ def main(scale_in_sec, h_start, h_cnt, v_start, v_cnt, total_counter):
 
                 tiles, right_shift, bottom_shift, nrows, ncols = \
                     split_rect_in_defined_tiles(rects, int(rect_side_in_px), prev_right_shift, prev_bottom_shift, 1)
-
                 fill_dict_with_res_array(np.array(tiles), tile_geodata_by_grid_coords[current_rect_coords],
                                          prev_right_shift, prev_bottom_shift, scale_in_deg, tiles_by_coords, ncols, nrows)
                 prev_right_shift = right_shift
@@ -378,9 +373,10 @@ def write_hgt_file(res_dict, total_counter, progress_counter):
         filename = get_filename_by_coords(coords[1], coords[2])
         img_size = np.shape(res_dict[coords])[0]
 
-        with open('C:/Users/tum/Programming/SRTM_data/res/N39-35/' + filename, 'wb') as f:
+        with open('D:/ReliefProject/res/6x6/N61-60/' + filename, 'wb') as f:
+            row = np.zeros(img_size * 2, dtype=np.int8)
             for lat_step in range(0, img_size):
-                row = np.full(img_size * 2, 0, dtype=np.int8)
+                # row = np.full(img_size * 2, 0, dtype=np.int8)
                 for lon_step in range(0, img_size):
                     m_next = np.int16(img[lat_step, lon_step])
                     row[2 * lon_step] = m_next >> 8
@@ -392,10 +388,10 @@ def write_hgt_file(res_dict, total_counter, progress_counter):
                             length=50)
 
 
-def read_hgt_file(filename, img_size, res_arr):
-    with open('C:/Users/tum/Programming/SRTM_data/res/' + filename, 'rb') as f:
+def read_hgt_file(path_to_file, img_size, res_arr):
+    with open(path_to_file, 'rb') as f:
+        row = np.full(img_size * 2, 0, dtype=np.int8)
         for lat_step in range(0, img_size):
-            row = np.full(img_size * 2, 0, dtype=np.int8)
             row = f.read(img_size * 2)
             for lon_step in range(0, img_size - 1):
                 m_next = np.int16()
