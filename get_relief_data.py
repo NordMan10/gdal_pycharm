@@ -175,17 +175,17 @@ def round_2d_array_to_default_scale(init_arr, round_number):
     init_arr_side = np.shape(init_arr)[0]
 
     # rows (vertical direction)
-    for i in range(0, init_arr_side - 1, int(round_number)):
+    for row in range(0, init_arr_side - 1, int(round_number)):
         temp_arr = []
         # cols (horizontal direction)
-        for j in range(0, init_arr_side - 1, int(round_number)):
+        for col in range(0, init_arr_side - 1, int(round_number)):
             average = 0
-            for inner_i in range(i, i + int(round_number)):
-                for inner_j in range(j, j + int(round_number)):
+            for inner_i in range(row, row + int(round_number)):
+                for inner_j in range(col, col + int(round_number)):
                     average += init_arr[inner_i][inner_j]
             average /= int(round_number) ** 2
             temp_arr.append(average)
-        temp_arr.append(init_arr[i][init_arr_side - 1])
+        temp_arr.append(init_arr[row][init_arr_side - 1])
         rounded_arr += [temp_arr]
 
     last_rounded_row = round_one_dim_array_to_default_scale(init_arr[init_arr_side - 1], round_number)
@@ -388,7 +388,9 @@ def write_hgt_file(res_dict, total_counter, progress_counter):
                             length=50)
 
 
-def read_hgt_file(path_to_file, img_size, res_arr):
+def read_hgt_file(path_to_file):
+    res_arr = np.full((1201, 1201), 0)
+    img_size = 1201
     with open(path_to_file, 'rb') as f:
         row = np.full(img_size * 2, 0, dtype=np.int8)
         for lat_step in range(0, img_size):

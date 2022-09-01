@@ -120,10 +120,10 @@ def combine_rects(rects):
 def round_one_dim_array_to_default_scale(init_arr, round_number):
     rounded_arr = []
 
-    for i in range(0, len(init_arr) - 1, int(round_number)):
+    for col in range(0, len(init_arr) - 1, int(round_number)):
         average = 0
-        for j in range(i, i + int(round_number)):
-            average += init_arr[j]
+        for inner_col in range(col, col + int(round_number)):
+            average += init_arr[inner_col]
         average /= int(round_number)
         rounded_arr.append(average)
 
@@ -139,11 +139,11 @@ def round_2d_array_to_default_scale(init_arr, round_number):
         temp_arr = []
         # cols (horizontal direction)
         for col in range(0, init_arr_side - 1, int(round_number)):
-            average = 0
+            average = np.int32(0)
             for inner_row in range(row, row + int(round_number)):
                 for inner_col in range(col, col + int(round_number)):
                     average += init_arr[inner_row][inner_col]
-            average /= int(round_number) ** 2
+            average /= int(round_number ** 2)
             temp_arr.append(average)
         # Add overlap column
         temp_arr.append(init_arr[row][init_arr_side - 1])
@@ -172,6 +172,34 @@ def get_tile_array_by_filename(filename):
     return band.ReadAsArray()
 
 
+def process_one_file_3x3(path_to_file):
+    gdal.UseExceptions()
+
+    ds = gdal.Open(path_to_file)
+    band = ds.GetRasterBand(1)
+    elevations = band.ReadAsArray()
+    elevations = round_2d_array_to_default_scale(elevations, 3)
+
+    long_min, long_delta, dxdy, lat_max, dydx, lat_delta = ds.GetGeoTransform()
+    lat_min = lat_max - 1
+    long_max = long_min + 1
+
+    # tiles_by_coords[(lat_max, lat_min, long_min, long_max)] = elevations
+
+    return (round(lat_max), round(lat_min), round(long_min), round(long_max)), elevations
+
+
+def get_one_parallel_tiles(parallel, dest_dir):
+    tiles_by_coords = {}
+    filenames = os.listdir(dest_dir)
+    for filename in filenames:
+        if int(filename[12: 14]) == parallel:
+            coords_set, data = process_one_file_3x3(os.path.join(dest_dir + '\\', filename))
+            tiles_by_coords[coords_set] = data
+
+    return tiles_by_coords
+
+
 def get_tiles_by_coords_3x3(pole, max_lat, min_lat, start_lon, end_lon, total_counter):
     gdal.UseExceptions()
     tiles_by_coords = {}
@@ -187,16 +215,8 @@ def get_tiles_by_coords_3x3(pole, max_lat, min_lat, start_lon, end_lon, total_co
                     print(path_to_file)
                     total_counter.increment()
 
-                    ds = gdal.Open(path_to_file)
-                    band = ds.GetRasterBand(1)
-                    elevations = band.ReadAsArray()
-                    elevations = relief.round_2d_array_to_default_scale(elevations, 3)
-
-                    long_min, long_delta, dxdy, lat_max, dydx, lat_delta = ds.GetGeoTransform()
-                    lat_min = lat_max - 1
-                    long_max = long_min + 1
-
-                    tiles_by_coords[(lat_max, lat_min, long_min, long_max)] = elevations
+                    coords_set, data = process_one_file_3x3(path_to_file)
+                    tiles_by_coords[coords_set] = data
 
     return tiles_by_coords
 
@@ -249,23 +269,26 @@ def get_filename_by_coords(lat, lon):
     return filename
 
 
-def write_hgt_file(pole, res_dict, total_counter, progress_counter):
-    for coords, img in res_dict.items():
-        filename = get_filename_by_coords(coords[1], coords[2])
-        img_size = np.shape(res_dict[coords])[0]
+def write_one_hgt_file(coords, data):
+    filename = get_filename_by_coords(coords[1], coords[2])
+    data_size = np.shape(data)[0]
 
-        # + pole + str(coords[1]) + '-' + str(coords[2]) +
-        with open('D:/ReliefProject/res/S74-70/' + filename, 'wb') as f:
-            row = np.zeros(img_size * 2, dtype=np.int8)
-            for lat_step in range(0, img_size):
-                # row = np.full(img_size * 2, 0, dtype=np.int8)
-                for lon_step in range(0, img_size):
-                    m_next = np.int16(img[lat_step, lon_step])
-                    row[2 * lon_step] = m_next >> 8
-                    row[2 * lon_step + 1] = (m_next & 0xFF)
+    with open('D:/ReliefProject/res/3x3/' + filename, 'wb') as f:
+        row = np.zeros(data_size * 2, dtype=np.int8)
+        for lat_step in range(0, data_size):
+            for lon_step in range(0, data_size):
+                m_next = np.int16(data[lat_step, lon_step])
+                row[2 * lon_step] = m_next >> 8
+                row[2 * lon_step + 1] = (m_next & 0xFF)
 
-                f.write(row.astype('int8').tobytes())
-        progress_counter.increment()
-        pb.printProgressBar(progress_counter.get(), total_counter.get(), prefix='Progress:', suffix='Complete',
-                            length=50)
+            f.write(row.astype('int8').tobytes())
+
+
+def write_hgt_files(res_dict, total_counter=None, progress_counter=None):
+    for coords, data in res_dict.items():
+        write_one_hgt_file(coords, data)
+        if not progress_counter == None:
+            progress_counter.increment()
+            pb.printProgressBar(progress_counter.get(), total_counter.get(), prefix='Progress:', suffix='Complete',
+                                length=50)
 

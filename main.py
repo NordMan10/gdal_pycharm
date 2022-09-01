@@ -6,6 +6,8 @@ from osgeo import gdal
 import get_time
 import get_relief_data as relief
 import get_tiles_from_aster as aster
+import filenames as fn
+import dirs_difference as dirs_diff
 
 
 class Counter:
@@ -31,8 +33,8 @@ def get_relief_files(scale_in_sec, h_start, h_cnt, v_start, v_cnt, total_counter
 
 
 def get_relief_files_from_aster(pole, start_lon, end_lon, total_counter, progress_counter):
-    res_dict = aster.get_tiles_by_coords_6x6(pole, 61, 60, start_lon, end_lon, total_counter)
-    aster.write_hgt_file(pole, res_dict, total_counter, progress_counter)
+    res_dict = aster.get_tiles_by_coords_3x3(pole, 83, 80, start_lon, end_lon, total_counter)
+    aster.write_hgt_files(res_dict, total_counter, progress_counter)
 
 
 # h_start = 1
@@ -58,11 +60,11 @@ thread3 = threading.Thread(target=get_relief_files_from_aster, args=('N', 121, 1
 start_time = get_time.get_current_time()
 print(start_time)
 
-thread1.start()
+# thread1.start()
 # thread2.start()
 # thread3.start()
-
-thread1.join()
+#
+# thread1.join()
 # thread2.join()
 # thread3.join()
 
@@ -90,10 +92,34 @@ if progress_counter.get() == total_counter.get() and progress_counter.get() > 0:
 #
 # print(res2[100][:1000])
 
+# fn.increase_lat(r'D:\ReliefProject\res\3x3\S83-80')
+
+# dirs_diff.main()
+
+
+# res_dict = aster.get_one_parallel_tiles(65, r'D:\ReliefProject\AsterGdemV3Data\data\S69-60')
+# aster.write_hgt_files(res_dict)
+
+
 ''' Tiff image check'''
-# path_to_file = 'D:/ReliefProject/AsterGdemV3Data/data/N64-60/ASTGTMV003_N60W001_dem.tif'
-# # path_to_file2 = 'C:/Users/tum/Programming/SRTM_data/srtm_data/22_24/srtm_22_24.tif'
-# #
+path_to_file = 'D:/ReliefProject/AsterGdemV3Data/data/S83-80/ASTGTMV003_S80E000_dem.tif'
+# path_to_file2 = 'D:/ReliefProject/res/3x3/S69-60/S69E034.tif'
+
+coords_set, data = aster.process_one_file_3x3(path_to_file)
+aster.write_one_hgt_file(coords_set, data)
+
+path_to_file_to_read = 'D:/ReliefProject/res/3x3/S83-80/S80W000.hgt'
+res = relief.read_hgt_file(path_to_file_to_read)
+plt.imshow(res, cmap='gist_earth')
+plt.show()
+
+path_to_file_to_read2 = 'D:/ReliefProject/res/3x3/S80E000.hgt'
+res2 = relief.read_hgt_file(path_to_file_to_read2)
+plt.imshow(res2, cmap='gist_earth')
+plt.show()
+
+# File ASTGTMV003_S80E000_dem is S80W000. Just rename three files
+
 # ds = gdal.Open(path_to_file)
 # band = ds.GetRasterBand(1)
 # elevations = band.ReadAsArray()
@@ -115,26 +141,31 @@ if progress_counter.get() == total_counter.get() and progress_counter.get() > 0:
 
 ''''''
 # rects = []
-
-# path_to_file1 = 'D:/ReliefProject/AsterGdemV3Data/data/N64-60/ASTGTMV003_N60E004_dem.tif'
+#
+# path_to_file1 = 'D:/ReliefProject/AsterGdemV3Data/data/N64-60/ASTGTMV003_N61E004_dem.tif'
 # ds1 = gdal.Open(path_to_file1)
 # band1 = ds1.GetRasterBand(1)
 # elevations1 = band1.ReadAsArray()
 # rects.append(elevations1)
 #
-# path_to_file2 = 'D:/ReliefProject/AsterGdemV3Data/data/N64-60/ASTGTMV003_N60E005_dem.tif'
+# path_to_file2 = 'D:/ReliefProject/AsterGdemV3Data/data/N64-60/ASTGTMV003_N61E005_dem.tif'
 # ds2 = gdal.Open(path_to_file2)
 # band2 = ds2.GetRasterBand(1)
 # elevations2 = band2.ReadAsArray()
 # rects.append(elevations2)
 #
-# path_to_file3 = 'D:/ReliefProject/AsterGdemV3Data/data/N64-60/ASTGTMV003_N60E006_dem.tif'
+# path_to_file3 = 'D:/ReliefProject/AsterGdemV3Data/data/N64-60/ASTGTMV003_N60E004_dem.tif'
 # ds3 = gdal.Open(path_to_file3)
 # band3 = ds3.GetRasterBand(1)
 # elevations3 = band3.ReadAsArray()
 # rects.append(elevations3)
 #
-# path_to_file4 = 'D:/ReliefProject/AsterGdemV3Data/data/N64-60/ASTGTMV003_N60E007_dem.tif'
+# long_min, long_delta, dxdy, lat_max, dydx, lat_delta = ds3.GetGeoTransform()
+# lat_min = lat_max - 1
+# long_max = long_min + 1
+# coords_set = (lat_max, lat_min, long_min, long_max)
+#
+# path_to_file4 = 'D:/ReliefProject/AsterGdemV3Data/data/N64-60/ASTGTMV003_N60E005_dem.tif'
 # ds4 = gdal.Open(path_to_file4)
 # band4 = ds4.GetRasterBand(1)
 # elevations4 = band4.ReadAsArray()
@@ -169,7 +200,14 @@ if progress_counter.get() == total_counter.get() and progress_counter.get() > 0:
 # band9 = ds9.GetRasterBand(1)
 # elevations9 = band9.ReadAsArray()
 # rects.append(elevations9)
-
+#
 # res = aster.combine_rects(np.asarray(rects))
+# res = relief.round_2d_array_to_default_scale(res, 6)
+# aster.write_one_hgt_file(coords_set, res)
 # print(np.shape(res))
+
+# path_to_file_to_read2 = 'D:/ReliefProject/res/3x3/N60E003.hgt'
+# res2 = relief.read_hgt_file(path_to_file_to_read2)
+# plt.imshow(res2, cmap='gist_earth', extent=[long_min, long_min + 1, lat_max - 1, lat_max])
+# plt.show()
 
