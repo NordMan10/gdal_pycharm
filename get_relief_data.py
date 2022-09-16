@@ -196,7 +196,7 @@ def round_2d_array_to_default_scale(init_arr, round_number):
 
 
 def replace_nodata_value_in_array(array):
-    np.clip(array, 0, 32768)
+    array[array == 32768] = 0
 
 
 def plot_image_grid(images, gdal_current_ds, right_shift, bottom_shift, scale_in_deg, res_dict,
@@ -315,8 +315,6 @@ def get_tile_arrays_and_coords_by_grid_coords(h_start, h_cnt, v_start, v_cnt, to
 # Start of execution
 
 def main(scale_in_sec, h_start, h_cnt, v_start, v_cnt, total_counter):
-    # pb.printProgressBar(0, total_counter.get(), prefix='Progress:', suffix='Complete', length=50)
-    # print('\n' + str(total_counter.get()))
     gdal.UseExceptions()
 
     rects = [[], [], [], []]
@@ -395,6 +393,40 @@ def read_hgt_file(path_to_file):
         row = np.full(img_size * 2, 0, dtype=np.int8)
         for lat_step in range(0, img_size):
             row = f.read(img_size * 2)
+            for lon_step in range(0, img_size):
+                m_next = np.int16()
+                high = row[2 * lon_step]
+                low = np.uint8(row[2 * lon_step + 1])
+                m_next = high * 256 + low if high >= 0 else -((-high * 256) + (-low))
+                res_arr[lat_step, lon_step] = m_next
+
+
+    return res_arr
+    # plt.imshow(res_arr, cmap='gist_earth')
+    # plt.show()
+
+
+def write_one_hgt_file(path_to_file, data):
+    data_size = np.shape(data)[0]
+
+    with open(path_to_file, 'wb') as f:
+        row = np.zeros(data_size * 2, dtype=np.int8)
+        for lat_step in range(0, data_size):
+            for lon_step in range(0, data_size):
+                m_next = np.int16(data[lat_step, lon_step])
+                row[2 * lon_step] = m_next >> 8
+                row[2 * lon_step + 1] = (m_next & 0xFF)
+
+            f.write(row.astype('int8').tobytes())
+
+
+def replace_value_in_hgt_file(path_to_file):
+    res_arr = np.full((1201, 1201), 0)
+    img_size = 1201
+    with open(path_to_file, 'rb') as f:
+        row = np.full(img_size * 2, 0, dtype=np.int8)
+        for lat_step in range(0, img_size):
+            row = f.read(img_size * 2)
             for lon_step in range(0, img_size - 1):
                 m_next = np.int16()
                 high = row[2 * lon_step]
@@ -402,7 +434,15 @@ def read_hgt_file(path_to_file):
                 m_next = high * 256 + low if high >= 0 else -((-high * 256) + (-low))
                 res_arr[lat_step, lon_step] = m_next
 
-    return res_arr
-    # plt.imshow(res_arr, cmap='gist_earth')
-    # plt.show()
+        res_arr[res_arr == 32768] = 0
+        write_one_hgt_file(path_to_file, res_arr)
+
+
+def replace_value_in_files_in_dir(dest_dir):
+    count = 0
+    total = 900
+    for filename in os.listdir(dest_dir):
+        replace_value_in_hgt_file(os.path.join(dest_dir, filename))
+        count += 1
+        print('\r' + str(count) + '/' + str(total) + ' files')
 

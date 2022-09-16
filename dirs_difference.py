@@ -1,9 +1,9 @@
 import os
 
 
-def main():
-    dir1 = r'D:\ReliefProject\AsterGdemV3Data\data\S83-80'
-    dir2 = r'D:\ReliefProject\res\3x3\S83-80'
+def main(source_dir, dest_dir):
+    dir1 = source_dir
+    dir2 = dest_dir
 
     dir1_content_list = []
     dir2_content_list = os.listdir(dir2)

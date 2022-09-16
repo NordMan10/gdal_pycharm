@@ -127,6 +127,7 @@ def round_one_dim_array_to_default_scale(init_arr, round_number):
         average /= int(round_number)
         rounded_arr.append(average)
 
+    # rounded_arr.append(init_arr[len(init_arr) - 1])
     return rounded_arr
 
 
@@ -172,21 +173,27 @@ def get_tile_array_by_filename(filename):
     return band.ReadAsArray()
 
 
-def process_one_file_3x3(path_to_file):
+def get_left_bottom_corner_coords_by_path(path_to_file):
+    return path_to_file[-15: -8]
+
+
+def read_one_tif_file_3x3(path_to_file):
     gdal.UseExceptions()
 
+    tile_coords = get_left_bottom_corner_coords_by_path(path_to_file)
     ds = gdal.Open(path_to_file)
     band = ds.GetRasterBand(1)
     elevations = band.ReadAsArray()
     elevations = round_2d_array_to_default_scale(elevations, 3)
+    # elevations[elevations == 32768] = 0
 
-    long_min, long_delta, dxdy, lat_max, dydx, lat_delta = ds.GetGeoTransform()
-    lat_min = lat_max - 1
-    long_max = long_min + 1
+    # long_min, long_delta, dxdy, lat_max, dydx, lat_delta = ds.GetGeoTransform()
+    # lat_min = lat_max - 1
+    # long_max = long_min + 1
 
     # tiles_by_coords[(lat_max, lat_min, long_min, long_max)] = elevations
 
-    return (round(lat_max), round(lat_min), round(long_min), round(long_max)), elevations
+    return tile_coords, elevations
 
 
 def get_one_parallel_tiles(parallel, dest_dir):
@@ -194,29 +201,27 @@ def get_one_parallel_tiles(parallel, dest_dir):
     filenames = os.listdir(dest_dir)
     for filename in filenames:
         if int(filename[12: 14]) == parallel:
-            coords_set, data = process_one_file_3x3(os.path.join(dest_dir + '\\', filename))
-            tiles_by_coords[coords_set] = data
+            tile_coords, data = read_one_tif_file_3x3(os.path.join(dest_dir + '\\', filename))
+            tiles_by_coords[tile_coords] = data
 
     return tiles_by_coords
 
 
-def get_tiles_by_coords_3x3(pole, max_lat, min_lat, start_lon, end_lon, total_counter):
-    gdal.UseExceptions()
+def get_tiles_by_coords_3x3(source_dir, dest_dir, progress_counter, total_counter):
     tiles_by_coords = {}
 
-    sides_of_world = ['W', 'E']
-    for lat in range(min_lat, max_lat + 1):
-        for lon in range(start_lon, end_lon + 1):
-            for side_of_world in sides_of_world:
-                path_to_file = 'D:/ReliefProject/AsterGdemV3Data/data/' + pole + str(max_lat) + '-' + \
-                               str(min_lat) + '/ASTGTMV003_' + pole + str(lat) + side_of_world + \
-                               re.sub(r"^(\d+)", pad_number3, str(lon)) + '_dem.tif'
-                if os.path.isfile(path_to_file):
-                    print(path_to_file)
-                    total_counter.increment()
+    filenames = os.listdir(source_dir)
+    total_count = len(filenames)
+    total_counter.add(total_count)
+    for filename in filenames:
+        path_to_file = os.path.join(source_dir, filename)
+        # print(path_to_file)
+        tile_coords, data = read_one_tif_file_3x3(path_to_file)
+        write_one_hgt_file(tile_coords, data, dest_dir)
 
-                    coords_set, data = process_one_file_3x3(path_to_file)
-                    tiles_by_coords[coords_set] = data
+        progress_counter.increment()
+        pb.printProgressBar(progress_counter.get(), total_counter.get(), prefix='Progress:', suffix='Complete',
+                            length=50)
 
     return tiles_by_coords
 
@@ -259,6 +264,11 @@ def get_tiles_by_coords_6x6(pole, max_lat, min_lat, start_lon, end_lon, total_co
     return tiles_by_coords
 
 
+def create_one_hgt_file_from_aster_tif(path_to_source_file, path_to_dest_dir):
+    tile_coords, elevations = read_one_tif_file_3x3(path_to_source_file)
+    write_one_hgt_file(tile_coords, elevations, path_to_dest_dir)
+
+
 def get_filename_by_coords(lat, lon):
     filename = "N" if lat >= 0 else "S"
     filename += re.sub(r"^(\d+)", pad_number2, str(abs(int(lat))))
@@ -269,11 +279,11 @@ def get_filename_by_coords(lat, lon):
     return filename
 
 
-def write_one_hgt_file(coords, data):
-    filename = get_filename_by_coords(coords[1], coords[2])
+def write_one_hgt_file(coords, data, dest_dir):
+    filename = coords + '.hgt'
     data_size = np.shape(data)[0]
 
-    with open('D:/ReliefProject/res/3x3/' + filename, 'wb') as f:
+    with open(os.path.join(dest_dir, filename), 'wb') as f:
         row = np.zeros(data_size * 2, dtype=np.int8)
         for lat_step in range(0, data_size):
             for lon_step in range(0, data_size):
@@ -284,10 +294,10 @@ def write_one_hgt_file(coords, data):
             f.write(row.astype('int8').tobytes())
 
 
-def write_hgt_files(res_dict, total_counter=None, progress_counter=None):
-    for coords, data in res_dict.items():
-        write_one_hgt_file(coords, data)
-        if not progress_counter == None:
+def write_hgt_files(tiles_dict, dest_dir, total_counter=None, progress_counter=None):
+    for coords, data in tiles_dict.items():
+        write_one_hgt_file(coords, data, dest_dir)
+        if progress_counter is not None:
             progress_counter.increment()
             pb.printProgressBar(progress_counter.get(), total_counter.get(), prefix='Progress:', suffix='Complete',
                                 length=50)
